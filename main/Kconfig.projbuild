@@ -1,0 +1,207 @@
+menu "ADS device Configuration"
+    config ADS_I2C_SDA_PIN
+        int "I2C SDA pin number"
+        default 23
+        help
+            Please input a valid pin number for I2C SDA
+
+    config ADS_I2C_SCL_PIN
+        int "I2C SCL pin number"
+        default 22
+        help
+            Please input a valid pin number for I2C SCL
+
+    config ADS_CONV_RDY_PIN
+        int "Conversion Ready pin number"
+        default 14
+        help
+            Conversion Ready pin number
+
+    choice ADS_MODEL
+        prompt "Please choose a supported Model from the List"
+        default ADS_MODEL_1115
+        help
+            Please choose a supported Model from the List
+        config ADS_MODEL_1115
+            bool "ADS1115"
+        config ADS_MODEL_1015
+            bool "ADS1015"
+    endchoice
+
+    choice ADS_I2C_ADDRESS
+        prompt "Please choose the I2C address which is configured via hardware"
+        default ADS_I2CADD_DEFAULT
+        help
+            Please choose the I2C address which is configured via hardware
+        config ADS_I2CADD_DEFAULT
+            bool "ADDR-Pin on GND (0x48)"
+        config ADS_I2CADD_ADDR_VDD
+            bool "ADDR-Pin on VDD (0x49)"
+        config ADS_I2CADD_ADDR_SDA
+            bool "ADDR-Pin on SDA (0x4A)"
+        config ADS_I2CADD_ADDR_SCL
+            bool "ADDR-Pin on SCL (0x4B)"
+    endchoice
+
+    choice ADS_MUX_SETTINGS
+        prompt "Please choose the MUX settings for default"
+        default ADS_MUX_AIN0_AIN1
+        help
+            Please choose the MUX settings for default
+        config ADS_MUX_AIN0_AIN1
+            bool "Delta-Sigma ADC on AIN0 and AIN1"
+        config ADS_MUX_AIN0_AIN3
+            bool "Delta-Sigma ADC on AIN0 and AIN3"
+        config ADS_MUX_AIN1_AIN3
+            bool "Delta-Sigma ADC on AIN1 and AIN3"
+        config ADS_MUX_AIN2_AIN3
+            bool "Delta-Sigma ADC on AIN2 and AIN3"
+        config ADS_MUX_AIN0_GND
+            bool "ADC on AIN0"
+        config ADS_MUX_AIN1_GND
+            bool "ADC on AIN1"
+        config ADS_MUX_AIN2_GND
+            bool "ADC on AIN2"
+        config ADS_MUX_AIN3_GND
+            bool "ADC on AIN3"
+    endchoice
+
+    choice ADS_PGA_SETTINGS
+        prompt "Please choose measurement range for programmable gain amplifier"
+        default ADS_PGA_2P048
+        help
+            Please choose measurement range for programmable gain amplifier. Please be aware that the range must be lower
+            than VDD in order to deliver correct measurement values.
+        config ADS_PGA_0P256
+            bool "Masurement voltage range: +-0.256V"
+        config ADS_PGA_0P512
+            bool "Masurement voltage range: +-0.512V"
+        config ADS_PGA_1P024
+            bool "Masurement voltage range: +-1.024V"
+        config ADS_PGA_2P048
+            bool "Masurement voltage range: +-2.048V"
+        config ADS_PGA_4P096
+            bool "Masurement voltage range: +-4.096V"
+        config ADS_PGA_6P144
+            bool "Masurement voltage range: +-6.144V"
+    endchoice
+
+    choice ADS_MEAS_MODE
+        prompt "Please choose an appropriate measurement mode for your device"
+        default ADS_MODE_SINGLE_SHOT
+        help
+            Supported Modes are SingleShot: Measurement is triggered manually by I2C transaction. Continues: Measurement
+            is triggered by internal timer of ADS1x device.
+        config ADS_MODE_CONTINUOUS
+            bool "Continous measurement mode, triggered by internal timer"
+        config ADS_MODE_SINGLE_SHOT
+            bool "Single Shot measurement"
+    endchoice
+
+    choice ADS_MEAS_RATE
+        prompt "Please choose an sampling mode for the ADS1115"
+        default ADS_RATE_128 if ADS_MODEL_1115
+        default ADS1015_RATE_1600 if ADS_MODEL_1015
+        help
+            Measurement rate for ADS1x device.
+        config ADS_RATE_8
+            depends on ADS_MODEL_1115
+            bool "8Hz Measurement rate"
+        config ADS_RATE_16
+            depends on ADS_MODEL_1115
+            bool "16Hz Measurement rate"
+        config ADS_RATE_32
+            depends on ADS_MODEL_1115
+            bool "32Hz Measurement rate"
+        config ADS_RATE_64
+            depends on ADS_MODEL_1115
+            bool "64Hz Measurement rate"
+        config ADS_RATE_128
+            depends on ADS_MODEL_1115 || ADS_MODEL_1015
+            bool "128Hz Measurement rate"
+        config ADS_RATE_250
+            depends on ADS_MODEL_1115 || ADS_MODEL_1015
+            bool "250Hz Measurement rate"
+        config ADS_RATE_475
+            depends on ADS_MODEL_1115
+            bool "475Hz Measurement rate"
+        config ADS_RATE_490
+            depends on ADS_MODEL_1015
+            bool "490Hz Measurement rate"
+        config ADS_RATE_860
+            depends on ADS_MODEL_1115
+            bool "860Hz Measurement rate"
+        config ADS_RATE_920
+            depends on ADS_MODEL_1015
+            bool "920Hz Measurement rate"
+        config ADS_RATE_1600
+            depends on ADS_MODEL_1015
+            bool "1600Hz Measurement rate"
+        config ADS_RATE_2400
+            depends on ADS_MODEL_1015
+            bool "2400Hz Measurement rate"
+        config ADS_RATE_3300
+            depends on ADS_MODEL_1015
+            bool "3300Hz Measurement rate"
+    endchoice
+
+    choice ADS_CMP_MODE
+        prompt "Please choose comparator mode"
+        default ADS_CMP_TRADITIONAL
+        help
+            Comparator mode
+        config ADS_CMP_TRADITIONAL
+            bool "Traditional Comparator mode"
+        config ADS_CMP_WINDOW
+            bool "Window Mode"
+    endchoice
+
+    choice ADS_CMP_MODE
+        prompt "Please choose comparator polarity"
+        default ADS_CMP_POL_ACTIVE_LOW
+        help
+            Comparator polarity
+        config ADS_CMP_POL_ACTIVE_LOW
+            bool "Comparator Active low"
+        config ADS_CMP_POL_ACTIVE_HIGH
+            bool "Comparator Active high"
+    endchoice
+
+    choice ADS_CMP_LAT
+        prompt "Please choose latching behavior of comparator"
+        default ADS_CMP_LAT_NOT_ACTIVE
+        help
+            Comparator latching
+        config ADS_CMP_LAT_NOT_ACTIVE
+            bool "Comparator latching not active"
+        config ADS_CMP_LAT_ACTIVE
+            bool "Comparator latching active"
+    endchoice
+
+    choice ADS_CMP_QUEUE_SIZE
+        prompt "Please choose a queue assert size"
+        default ADS_CMP_QUE_ASSERT_DISABLE
+        help
+            Comparator latching
+        config ADS_CMP_QUE_ASSERT_1_CONV
+            bool "Comparator queue size assert 1"
+        config ADS_CMP_QUE_ASSERT_2_CONV
+            bool "Comparator queue size assert 2"
+        config ADS_CMP_QUE_ASSERT_4_CONV
+            bool "Comparator queue size assert 4"
+        config ADS_CMP_QUE_ASSERT_DISABLE
+            bool "Comparator queue disabled"
+    endchoice
+
+    config ADS_CONV_BUF_SIZE
+        int "Buffer size of conversion value"
+        default 12
+        help
+            This buffer is used for evaluating the physical value (when filter is activated) and diagnosis purposis
+
+    config ADS_DIAG_VAL_FROZEN_THRESH
+        int "Diagnosis: Number of measurements with same values, until sensor is considered malfunctioning"
+        default 5
+        help
+            Diagnosis: Number of measurements with same values, until sensor is considered malfunctioning
+endmenu
