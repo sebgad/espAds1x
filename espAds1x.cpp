@@ -6,29 +6,39 @@ ADS1x::ADS1x() {
   _iBuffCnt = -1;
   _iBuffMaxFillIndex = 0;
   _iValFroozenDebCnt = 0;
+  _iState = 0;
+  _iError = 0;
 
   for (int i_elem=0; i_elem<ADS1x_CONV_BUF_SIZE; i_elem++){_ptrConvBuff[i_elem]=0;}
 
   // Initialize I2C
-  ESP_ERROR_CHECK(initI2CMaster());
-  setDefault();
+  ESP_ERROR_CHECK_WITHOUT_ABORT(_initI2CMaster());
+  writeConfiguration();
 }
 
-void ADS1x::setDefault() {
+esp_err_t ADS1x::writeConfiguration() {
   /**
    * Bring ADS1x back to default settings
   */
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
+  esp_err_t ret_value = ESP_OK;
+  ret_value = getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister);
 
-  setCompPolarity(ADS1x_CMP_POL_SETTINGS);
-  setMux(ADS1x_MUX_SETTINGS);
-  setRate(ADS1x_MEAS_RATE);
-  setPGA(ADS1x_PGA_SETTINGS);
-  setCompLatchingMode(ADS1x_CMP_LAT_SETTINGS);
-  setPinRdyMode(ADS1x_CMP_QUE_SETTINGS);
-  setOpMode(ADS1x_MEAS_MODE_SETTINGS);
-  setRegisterValue(ADS1x_CONFIG_REG, _iI2cConfigRegValue);
-  printConfigReg();
+  if (ret_value != ESP_OK)
+  {
+    setCompPolarity(ADS1x_CMP_POL_SETTINGS);
+    setMux(ADS1x_MUX_SETTINGS);
+    setRate(ADS1x_MEAS_RATE);
+    setPGA(ADS1x_PGA_SETTINGS);
+    setCompLatchingMode(ADS1x_CMP_LAT_SETTINGS);
+    setPinRdyMode(ADS1x_CMP_QUE_SETTINGS);
+    setOpMode(ADS1x_MEAS_MODE_SETTINGS);
+    ret_value = setRegisterValue(ADS1x_CONFIG_REG, _iConfigRegister);
+    printConfigReg();
+  }
+  if (ret_value != ESP_OK) {
+    ESP_LOGE(strLogTag, "Write configuration register failed. Errror Code: %s", esp_err_to_name(ret_value));
+  }
+  return ret_value;
 }
 
 
@@ -39,18 +49,19 @@ void ADS1x::startSingleShotMeas() {
    * no effect when a conversion is ongoing.
    *
   */
-    getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-    writeBit(_iI2cConfigRegValue, ADS1x_OS, true);
-    setRegisterValue(ADS1x_CONFIG_REG, _iI2cConfigRegValue);
+    ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+    _writeBit(_iConfigRegister, ADS1x_OS, true);
+    ESP_ERROR_CHECK_WITHOUT_ABORT(setRegisterValue(ADS1x_CONFIG_REG, _iConfigRegister));
 };
+
 
 bool ADS1x::getOpStatus(void){
   /**
    * Get Operational status
    * @return: 0 : Device is currently performing a conversion, 1 : Device is not currently performing a conversion
   */
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & 1<<ADS1x_OS) >> ADS1x_OS;
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & 1<<ADS1x_OS) >> ADS1x_OS;
 }
 
 
@@ -67,13 +78,13 @@ void ADS1x::setMux(uint8_t b_mux) {
    *    ADS1x_MUX_AIN2_GND AINp = AIN2 and AINn = GND
    *    ADS1x_MUX_AIN3_GND AINp = AIN3 and AINn = GND
   */
-  bool b2 = readBit(b_mux, 2);
-  bool b1 = readBit(b_mux, 1);
-  bool b0 = readBit(b_mux, 0);
+  bool b2 = _readBit(b_mux, 2);
+  bool b1 = _readBit(b_mux, 1);
+  bool b0 = _readBit(b_mux, 0);
 
-  writeBit(_iI2cConfigRegValue, ADS1x_MUX2, b2);
-  writeBit(_iI2cConfigRegValue, ADS1x_MUX1, b1);
-  writeBit(_iI2cConfigRegValue, ADS1x_MUX0, b0);
+  _writeBit(_iConfigRegister, ADS1x_MUX2, b2);
+  _writeBit(_iConfigRegister, ADS1x_MUX1, b1);
+  _writeBit(_iConfigRegister, ADS1x_MUX0, b0);
 }
 
 
@@ -90,8 +101,8 @@ uint8_t ADS1x::getMux() {
    *    0b110 AINp = AIN2 and AINn = GND
    *    0b111 AINp = AIN3 and AINn = GND
   */
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & 0b111<<ADS1x_MUX0) >> ADS1x_MUX0;
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & 0b111<<ADS1x_MUX0) >> ADS1x_MUX0;
 }
 
 
@@ -107,13 +118,13 @@ void ADS1x::setPGA(uint8_t cmp_gain) {
    *    ADS1x_PGA_0P256 : FSR = +-0.256V
   */
 
-  bool b2 = readBit(cmp_gain, 2);
-  bool b1 = readBit(cmp_gain, 1);
-  bool b0 = readBit(cmp_gain, 0);
+  bool b2 = _readBit(cmp_gain, 2);
+  bool b1 = _readBit(cmp_gain, 1);
+  bool b0 = _readBit(cmp_gain, 0);
 
-  writeBit(_iI2cConfigRegValue, ADS1x_PGA2, b2);
-  writeBit(_iI2cConfigRegValue, ADS1x_PGA1, b1);
-  writeBit(_iI2cConfigRegValue, ADS1x_PGA0, b0);
+  _writeBit(_iConfigRegister, ADS1x_PGA2, b2);
+  _writeBit(_iConfigRegister, ADS1x_PGA1, b1);
+  _writeBit(_iConfigRegister, ADS1x_PGA0, b0);
 }
 
 
@@ -128,9 +139,9 @@ uint8_t ADS1x::getPGA() {
    *    0b100 : FSR = +-0.512V
    *    0b101 : FSR = +-0.256V
   */
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
 
-  return (_iI2cConfigRegValue & 0b111<<ADS1x_PGA0) >> ADS1x_PGA0;
+  return (_iConfigRegister & 0b111<<ADS1x_PGA0) >> ADS1x_PGA0;
 }
 
 
@@ -141,7 +152,7 @@ void ADS1x::setOpMode(bool b_mode) {
    *    ADS1x_MODE_CONTINUOUS : Continuous-conversion mode
    *    ADS1x_MODE_SINGLESHOT : Single-shot mode or power-down state (default)
   */
-  writeBit(_iI2cConfigRegValue, ADS1x_MODE, b_mode);
+  _writeBit(_iConfigRegister, ADS1x_MODE, b_mode);
 }
 
 
@@ -153,8 +164,8 @@ uint8_t ADS1x::getOpMode() {
    *    1 : Single-shot mode or power-down state (default)
   */
 
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & 1<<ADS1x_MODE) >> ADS1x_MODE;
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & 1<<ADS1x_MODE) >> ADS1x_MODE;
 }
 
 void ADS1x::setRate(uint8_t cmp_rate) {
@@ -171,13 +182,13 @@ void ADS1x::setRate(uint8_t cmp_rate) {
    *    ADS1x_RATE_860  : 860 SPS
   */
 
-  bool b2 = readBit(cmp_rate, 2);
-  bool b1 = readBit(cmp_rate, 1);
-  bool b0 = readBit(cmp_rate, 0);
+  bool b2 = _readBit(cmp_rate, 2);
+  bool b1 = _readBit(cmp_rate, 1);
+  bool b0 = _readBit(cmp_rate, 0);
 
-  writeBit(_iI2cConfigRegValue, ADS1x_DR2, b2);
-  writeBit(_iI2cConfigRegValue, ADS1x_DR1, b1);
-  writeBit(_iI2cConfigRegValue, ADS1x_DR0, b0);
+  _writeBit(_iConfigRegister, ADS1x_DR2, b2);
+  _writeBit(_iConfigRegister, ADS1x_DR1, b1);
+  _writeBit(_iConfigRegister, ADS1x_DR0, b0);
 }
 
 
@@ -195,8 +206,8 @@ uint8_t ADS1x::getRate() {
    *    0b111 : 860 SPS
   */
 
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & 0b111<<ADS1x_DR0) >> ADS1x_DR0;
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & 0b111<<ADS1x_DR0) >> ADS1x_DR0;
 }
 
 
@@ -208,7 +219,7 @@ void ADS1x::setCompMode(bool b_mode) {
    *    ADS1x_CMP_MODE_WINDOW       : Window comparator
   */
 
-  writeBit(_iI2cConfigRegValue, ADS1x_CMP_MDE, b_mode);
+  _writeBit(_iConfigRegister, ADS1x_CMP_MDE, b_mode);
 }
 
 
@@ -220,8 +231,8 @@ uint8_t ADS1x::getCompMode() {
    *    1  : Window comparator
   */
 
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & 1<<ADS1x_CMP_MDE) >> ADS1x_CMP_MDE;
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & 1<<ADS1x_CMP_MDE) >> ADS1x_CMP_MDE;
 }
 
 
@@ -233,7 +244,7 @@ void ADS1x::setCompPolarity(bool b_polarity) {
    *    ADS1x_CMP_POL_ACTIVE_HIGH : Active high
   */
 
-  writeBit(_iI2cConfigRegValue, ADS1x_CMP_POL, b_polarity);
+  _writeBit(_iConfigRegister, ADS1x_CMP_POL, b_polarity);
 }
 
 
@@ -245,8 +256,8 @@ uint8_t ADS1x::getCompPolarity() {
    *    1  : Active high
   */
 
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & (1<<ADS1x_CMP_POL)) >> ADS1x_CMP_POL;
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & (1<<ADS1x_CMP_POL)) >> ADS1x_CMP_POL;
 }
 
 void ADS1x::setCompLatchingMode(bool b_mode) {
@@ -261,7 +272,7 @@ void ADS1x::setCompLatchingMode(bool b_mode) {
    *                                 ALERT/RDY bus line.
   */
 
-  writeBit(_iI2cConfigRegValue, ADS1x_CMP_LAT, b_mode);
+  _writeBit(_iConfigRegister, ADS1x_CMP_LAT, b_mode);
 }
 
 
@@ -277,8 +288,8 @@ uint8_t ADS1x::getCompLatchingMode() {
    *        ALERT/RDY bus line.
   */
 
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & (1<<ADS1x_CMP_LAT)) >> ADS1x_CMP_LAT;
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & (1<<ADS1x_CMP_LAT)) >> ADS1x_CMP_LAT;
 }
 
 
@@ -293,11 +304,11 @@ void ADS1x::setCompQueueMode(uint8_t b_mode) {
    *    ADS1x_CMP_QUE_ASSERT_4_CONV : Assert after four conversions
    *    ADS1x_CMP_DISABLE           : Disable comparator and set ALERT/RDY pin to high-impedance (default)
   */
-  bool b1 = readBit(b_mode, 1);
-  bool b0 = readBit(b_mode, 0);
+  bool b1 = _readBit(b_mode, 1);
+  bool b0 = _readBit(b_mode, 0);
 
-  writeBit(_iI2cConfigRegValue, ADS1x_CMP_QUE1, b1);
-  writeBit(_iI2cConfigRegValue, ADS1x_CMP_QUE0, b0);
+  _writeBit(_iConfigRegister, ADS1x_CMP_QUE1, b1);
+  _writeBit(_iConfigRegister, ADS1x_CMP_QUE0, b0);
 }
 
 
@@ -313,8 +324,8 @@ uint8_t ADS1x::getCompQueueMode() {
    *    0b11 : Disable comparator and set ALERT/RDY pin to high-impedance (default)
   */
 
-  getRegisterValue(ADS1x_CONFIG_REG, &_iI2cConfigRegValue);
-  return (_iI2cConfigRegValue & (0b11<<ADS1x_CMP_QUE0)>>ADS1x_CMP_QUE0);
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_CONFIG_REG, &_iConfigRegister));
+  return (_iConfigRegister & (0b11<<ADS1x_CMP_QUE0)>>ADS1x_CMP_QUE0);
 }
 
 
@@ -326,10 +337,10 @@ void ADS1x::setCompLowThreshBit(bool b_value, int i_bit_num){
    * @param i_bit_num: bit number to change, LSF bit is 0
   */
 
-  getRegisterValue(ADS1x_LOW_THRESH_REG, &iLowThreshReg);
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_LOW_THRESH_REG, &_iLowThreshRegister));
 
-  writeBit(iLowThreshReg, i_bit_num, b_value);
-  setRegisterValue(ADS1x_LOW_THRESH_REG, iLowThreshReg);
+  _writeBit(_iLowThreshRegister, i_bit_num, b_value);
+  setRegisterValue(ADS1x_LOW_THRESH_REG, _iLowThreshRegister);
 }
 
 uint8_t ADS1x::getCompLowThreshBit(int i_bit_num){
@@ -340,8 +351,8 @@ uint8_t ADS1x::getCompLowThreshBit(int i_bit_num){
    * @return bit value on i_bit_num
   */
 
-  iLowThreshReg = getRegisterValue(ADS1x_LOW_THRESH_REG, &iLowThreshReg);
-  return readBit(iLowThreshReg, i_bit_num);
+  _iLowThreshRegister = ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_LOW_THRESH_REG, &_iLowThreshRegister));
+  return _readBit(_iLowThreshRegister, i_bit_num);
 }
 
 
@@ -353,9 +364,9 @@ void ADS1x::setCompHighThreshBit(bool b_value, int i_bit_num){
    * @param i_bit_num: bit number to change, LSF bit is 0
   */
 
-  iHighThreshReg = getRegisterValue(ADS1x_HIGH_THRESH_REG, &iHighThreshReg);
-  writeBit(iHighThreshReg, i_bit_num, b_value);
-  setRegisterValue(ADS1x_HIGH_THRESH_REG, iHighThreshReg);
+  _iHighThreshRegister = ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_HIGH_THRESH_REG, &_iHighThreshRegister));
+  _writeBit(_iHighThreshRegister, i_bit_num, b_value);
+  setRegisterValue(ADS1x_HIGH_THRESH_REG, _iHighThreshRegister);
 }
 
 uint8_t ADS1x::getCompHighThreshBit(int i_bit_num){
@@ -366,8 +377,8 @@ uint8_t ADS1x::getCompHighThreshBit(int i_bit_num){
    * @return bit value on i_bit_num
   */
 
-  getRegisterValue(ADS1x_HIGH_THRESH_REG, &iHighThreshReg);
-  return readBit(iHighThreshReg, i_bit_num);
+  ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_HIGH_THRESH_REG, &_iHighThreshRegister));
+  return _readBit(_iHighThreshRegister, i_bit_num);
 }
 
 
@@ -382,11 +393,11 @@ void ADS1x::setPinRdyMode(uint8_t b_comp_queue_mode){
 
   setCompQueueMode(b_comp_queue_mode);
 
-  iHighThreshReg = 0b1111111111111111;
-  setRegisterValue(ADS1x_HIGH_THRESH_REG, iHighThreshReg);
+  _iHighThreshRegister = 0b1111111111111111;
+  setRegisterValue(ADS1x_HIGH_THRESH_REG, _iHighThreshRegister);
 
-  iLowThreshReg = 0b0000000000000000;
-  setRegisterValue(ADS1x_LOW_THRESH_REG, iLowThreshReg);
+  _iLowThreshRegister = 0b0000000000000000;
+  setRegisterValue(ADS1x_LOW_THRESH_REG, _iLowThreshRegister);
 }
 
 
@@ -400,17 +411,17 @@ uint8_t ADS1x::getPinRdyMode() {
   */
   uint8_t b_cmp_queue_mode = getCompQueueMode();
 
-   getRegisterValue(ADS1x_LOW_THRESH_REG, &iLowThreshReg);
-   getRegisterValue(ADS1x_HIGH_THRESH_REG, &iHighThreshReg);
+   ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_LOW_THRESH_REG, &_iLowThreshRegister));
+   ESP_ERROR_CHECK_WITHOUT_ABORT(getRegisterValue(ADS1x_HIGH_THRESH_REG, &_iHighThreshRegister));
 
-  if (!readBit(iLowThreshReg, 15) && readBit(iHighThreshReg, 15) && !(b_cmp_queue_mode==ADS1x_CMP_DISABLE)) {
+  if (!_readBit(_iLowThreshRegister, 15) && _readBit(_iHighThreshRegister, 15) && !(b_cmp_queue_mode==ADS1x_CMP_DISABLE)) {
     return true;
   } else {
     return false;
   }
 }
 
-void ADS1x::writeBit(uint16_t &i_register, int i_pos, bool b_value){
+void ADS1x::_writeBit(uint16_t &i_register, int i_pos, bool b_value){
   /** Write a bit in a uint16_t number at a given position
    * @param i_register: uint16_t register as reference
    * @param i_pos: position of the bit
@@ -423,7 +434,7 @@ void ADS1x::writeBit(uint16_t &i_register, int i_pos, bool b_value){
  }
 }
 
-bool ADS1x::readBit(uint16_t i_register, int i_pos){
+bool ADS1x::_readBit(uint16_t i_register, int i_pos){
   /**
    * read bit in uint16_t number at a given position
    * @param: i_register: number where to read out the bit
@@ -433,27 +444,31 @@ bool ADS1x::readBit(uint16_t i_register, int i_pos){
   return ((i_register & (1<<i_pos)) >> i_pos);
 }
 
-uint16_t ADS1x::readConversionRegister() {
+ esp_err_t ADS1x::readConversionRegister(uint16_t * i_conversion_value) {
   /**
    * read conversion data from the conversion register as int value. Size can be maximum 16bit due to register length of the ADS1x
   */
-  uint16_t conversion_value;
-  getRegisterValue(ADS1x_CONVERSION_REG, &conversion_value);
-  return conversion_value;
+  esp_err_t ret_value;
+
+  ret_value = getRegisterValue(ADS1x_CONVERSION_REG, i_conversion_value);
+  if (ret_value != ESP_OK){
+    *i_conversion_value = 0;
+  }
+  return ret_value;
 }
 
 
-float ADS1x::getVoltVal() {
+esp_err_t ADS1x::getVoltVal(float * f_conv_volt) {
   /**
    * returns voltage level, based on the adc value of the ADS1x.
    * @return measured voltage
   */
-  float f_conv_volt;
-
-  f_conv_volt = getConvVal() * ADS1x_LSB_SETTINGS;
-
-  return f_conv_volt;
+  esp_err_t ret_value = ESP_OK;
+  ret_value = getConvVal(f_conv_volt);
+  *f_conv_volt *= ADS1x_LSB_SETTINGS;
+  return ret_value;
 }
+
 
 int ADS1x::getLatestBufVal(){
   /**
@@ -475,13 +490,16 @@ void ADS1x::setPhysConv(const float f_x_1, const float f_0) {
    * @param f_gradient: gradient of the conversion function
    * @param f_offset: (y-)Offset of the conversion function
   */
-  initConvTable(1);
+  _initConvTable(1);
 
   _ptrConvTable[0][0] = 0.0;
   _ptrConvTable[0][1] = f_x_1;
   _ptrConvTable[0][2] = f_0;
 
+  _iState |= ADS1x_PHY_CONV_SET;
+
 }
+
 
 void ADS1x::setPhysConv(const float f_x_2, const float f_x_1, const float f_0) {
   /**
@@ -489,12 +507,14 @@ void ADS1x::setPhysConv(const float f_x_2, const float f_x_1, const float f_0) {
    * @param f_gradient: gradient of the conversion function
    * @param f_offset: (y-)Offset of the conversion function
   */
-  initConvTable(1);
+  _initConvTable(1);
 
   _ptrConvTable[0][0] = f_x_2;
   _ptrConvTable[0][1] = f_x_1;
   _ptrConvTable[0][2] = f_0;
+  _iState |= ADS1x_PHY_CONV_SET;
 }
+
 
 void ADS1x::setPhysConv(const float arr_conv_table[][2], size_t i_size_conv) {
   /**
@@ -509,7 +529,7 @@ void ADS1x::setPhysConv(const float arr_conv_table[][2], size_t i_size_conv) {
   float f_act_y;
 
   // Initialize member _ptrConvTable
-  initConvTable(i_size_conv);
+  _initConvTable(i_size_conv);
 
   // calculate gradient and offset and write it to array
   for (int i_row=1; i_row<i_size_conv; i_row++){
@@ -525,46 +545,57 @@ void ADS1x::setPhysConv(const float arr_conv_table[][2], size_t i_size_conv) {
     // offset
     _ptrConvTable[i_row-1][2] = f_prev_y - _ptrConvTable[i_row-1][1]*f_prev_x;
   }
+  _iState |= ADS1x_PHY_CONV_SET;
 }
 
 
-float ADS1x::getPhysVal(void){
+esp_err_t ADS1x::getPhysVal(float * f_physical){
   /**
    * calculate physical value based on defined conversion and adc value
    * NOTE: readConversionRegister() must be called before to get adc value from ADS1x register over I2C
    * @return: physical value based on voltage read out
   */
+  esp_err_t ret_value;
+  float f_voltage;
 
-  float f_voltage = getVoltVal();
-  float f_physical = 0.F;
+  ret_value = getVoltVal(&f_voltage);
 
-  if (_iSizeConvTable==1){
-    // polynom or linear regression
-    f_physical = f_voltage * f_voltage * _ptrConvTable[0][0] + f_voltage * _ptrConvTable[0][1] + _ptrConvTable[0][2];
-  } else {
+  if (ret_value == ESP_OK){
+    if ((_iState & ADS1x_PHY_CONV_SET) == ADS1x_PHY_CONV_SET)
+    {
+      if (_iSizeConvTable==1){
+        // polynom or linear regression
+        *f_physical = f_voltage * f_voltage * _ptrConvTable[0][0] + f_voltage * _ptrConvTable[0][1] + _ptrConvTable[0][2];
+      } else {
+        if (f_voltage < _ptrConvTable[0][0]) {
+          // left outside
 
-    if (f_voltage < _ptrConvTable[0][0]) {
-      // left outside
-
-    } else {
-      // lookup table is given
-      for (int i_idx = 1; i_idx < _iSizeConvTable; i_idx++) {
-        if( (f_voltage >= _ptrConvTable[i_idx-1][0]) && (f_voltage < _ptrConvTable[i_idx][0]) ) {
-          f_physical = f_voltage * _ptrConvTable[i_idx-1][1] + _ptrConvTable[i_idx-1][2];
-          break;
+        } else {
+          // lookup table is given
+          for (int i_idx = 1; i_idx < _iSizeConvTable; i_idx++) {
+            if( (f_voltage >= _ptrConvTable[i_idx-1][0]) && (f_voltage < _ptrConvTable[i_idx][0]) ) {
+              *f_physical = f_voltage * _ptrConvTable[i_idx-1][1] + _ptrConvTable[i_idx-1][2];
+              break;
+            }
+          }
         }
       }
+    } else {
+      ESP_LOGE(strLogTag, "Cannot get physical value. No conversion method defined.");
+      ret_value = ESP_FAIL;
     }
   }
-  return f_physical;
+  return ret_value;
 }
+
 
 void ADS1x::printConfigReg() {
   /**
    * Dump Config register to Serial output
   */
-  ESP_LOGI(strLogTag, "ADS1x Conf.Reg.: %X", _iI2cConfigRegValue);
+  ESP_LOGI(strLogTag, "ADS1x Conf.Reg.: %X", _iConfigRegister);
 }
+
 
 esp_err_t ADS1x::getRegisterValue(uint8_t i_reg, uint16_t * read_value) {
   /**
@@ -574,21 +605,31 @@ esp_err_t ADS1x::getRegisterValue(uint8_t i_reg, uint16_t * read_value) {
    */
 
   uint8_t ptr_data[2];
-  esp_err_t esp_ret_value;
+  esp_err_t esp_ret_value = ESP_FAIL;
 
-  esp_ret_value = i2c_master_write_read_device(ADS1x_I2C_PORT_NUM, _iI2cAddress, &i_reg, 1, ptr_data, 2,
-                                               100 / portTICK_PERIOD_MS);
-  if(esp_ret_value == ESP_ERR_TIMEOUT){
-    ESP_LOGE(strLogTag, "Error Timeout in I2C communication.\n");
-  } else if(esp_ret_value == ESP_FAIL){
-    ESP_LOGE(strLogTag, "Error in I2C communication.Slave not acknowledged.\n");
+  if ( ((_iState & ADS1x_I2C_INITIALIZED) == ADS1x_I2C_INITIALIZED) &&
+       ((_iError & ADS1x_ERR_COMMUNICATION) != ADS1x_ERR_COMMUNICATION)){
+    esp_ret_value = i2c_master_write_read_device(ADS1x_I2C_PORT_NUM, ADS1x_ADDR, &i_reg, 1, ptr_data, 2,
+                                                10 / portTICK_PERIOD_MS);
+    if(esp_ret_value == ESP_ERR_TIMEOUT){
+      ESP_LOGE(strLogTag, "Error Timeout in I2C communication.");
+    } else if(esp_ret_value == ESP_FAIL){
+      ESP_LOGE(strLogTag, "Error in I2C communication.Slave not acknowledged.");
+    }
+    if (esp_ret_value != ESP_OK){
+      _iError |= ADS1x_ERR_COMMUNICATION;
+    }
+    *read_value = (uint16_t)(ptr_data[0]<<8) | ptr_data[1];
+  } else {
+    esp_ret_value = ESP_FAIL;
+    ESP_LOGE(strLogTag, "I2C Master is not initialized yet or Communication Error.");
   }
-  *read_value = (uint16_t)(ptr_data[0]<<8) | ptr_data[1];
 
   return esp_ret_value;
 }
 
-void ADS1x::setRegisterValue(uint8_t i_reg, uint16_t i_data) {
+
+esp_err_t ADS1x::setRegisterValue(uint8_t i_reg, uint16_t i_data) {
   /**
    * @brief Return a specified register value of ADS1x (only 2 uint8_t register are supported yet.)
    *
@@ -599,13 +640,63 @@ void ADS1x::setRegisterValue(uint8_t i_reg, uint16_t i_data) {
 
   ptr_data[0] = _lowbyte(i_data);
   ptr_data[1] = _highbyte(i_data);
-  sendI2CFrame(i_reg, ptr_data, 2);
+
+  // return code
+  esp_err_t ret_value;
+
+  if (((_iState & ADS1x_I2C_INITIALIZED) == ADS1x_I2C_INITIALIZED) &&
+      ((_iError & ADS1x_ERR_COMMUNICATION) != ADS1x_ERR_COMMUNICATION))
+  {
+    // Link i2c ressource
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+    // Change address register pointer of ADS
+    // Put Start command in queue
+    ret_value = i2c_master_start(cmd);
+
+    if (ret_value == ESP_OK){
+      // Initiate communication with start address and indicating read request, no Acknoledgement
+      ret_value = i2c_master_write_byte(cmd, (ADS1x_ADDR<<1) | I2C_MASTER_WRITE, I2C_MASTER_ACK);
+    }
+
+    if (ret_value == ESP_OK){
+      ret_value = i2c_master_write_byte(cmd, i_reg, I2C_MASTER_ACK);
+    }
+
+    for (int i_step=2; i_step>0; i_step--){
+      if (ret_value == ESP_OK){
+        // Write MSB from ADS1x and acknowledge it
+        ret_value = i2c_master_write_byte(cmd, *(ptr_data + i_step - 1), I2C_MASTER_ACK);
+      }
+    }
+
+    if (ret_value == ESP_OK){
+      // Put Stop command in queue
+      ret_value = i2c_master_stop(cmd);
+    }
+
+    if (ret_value == ESP_OK){
+      // Execute all queued commands, 1000ms timeout
+      ret_value = i2c_master_cmd_begin(ADS1x_I2C_PORT_NUM, cmd, 1000 / portTICK_PERIOD_MS);
+    }
+
+    if (ret_value != ESP_OK){
+      ESP_LOGE(strLogTag, "Sending I2C frame failed. Error Reason: %s", esp_err_to_name(ret_value));
+    }
+
+    i2c_cmd_link_delete(cmd);
+  } else {
+    ret_value = ESP_FAIL;
+    ESP_LOGE(strLogTag, "I2C Master is not initialized yet.");
+  }
+  return ret_value;
 }
 
-esp_err_t ADS1x::initI2CMaster(void)
+
+esp_err_t ADS1x::_initI2CMaster(void)
 {
   i2c_port_t i2c_master_port = ADS1x_I2C_PORT_NUM;
-  esp_err_t esp_err;
+  esp_err_t ret_code;
 
   i2c_config_t conf;
 
@@ -617,48 +708,38 @@ esp_err_t ADS1x::initI2CMaster(void)
   conf.master.clk_speed = 100000;
   conf.clk_flags = 0;
 
-  i2c_param_config(i2c_master_port, &conf);
-  esp_err = i2c_driver_install(i2c_master_port, conf.mode, 0, 0, 0);
+  ret_code = i2c_param_config(i2c_master_port, &conf);
 
-  return esp_err;
+  if (ret_code == ESP_OK){
+    ret_code = i2c_driver_install(i2c_master_port, conf.mode, 0, 0, 0);
+  }
+
+  if (ret_code != ESP_OK){
+    ESP_LOGE(strLogTag, "Initialisation of I2C Master went wrong. Error Description: %s", esp_err_to_name(ret_code));
+    _iError |= ADS1x_ERR_MASTER_NOT_INIT;
+  } else {
+    _iState |= ADS1x_I2C_INITIALIZED;
+    _iError &= ~ADS1x_ERR_MASTER_NOT_INIT;
+  }
+
+  return ret_code;
 }
+
 
 esp_err_t ADS1x::stop(void)
 {
   esp_err_t esp_err;
   esp_err = i2c_driver_delete(ADS1x_I2C_PORT_NUM);
 
+  if (esp_err != ESP_OK){
+    ESP_LOGE(strLogTag, "Cannot remove I2C driver. Error description: %s", esp_err_to_name(esp_err));
+  }
+
   return esp_err;
 }
 
 
-void ADS1x::sendI2CFrame(uint8_t i_reg, uint8_t* data_write, size_t data_len)
-{
-  // Link i2c ressource
-  i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-
-  // Change address register pointer of ADS
-  // Put Start command in queue
-  i2c_master_start(cmd);
-  // Initiate communication with start address and indicating read request, no Acknoledgement
-  i2c_master_write_byte(cmd, (_iI2cAddress<<1) | I2C_MASTER_WRITE, I2C_MASTER_ACK);
-
-  i2c_master_write_byte(cmd, i_reg, I2C_MASTER_ACK);
-
-  for (int i_step=data_len; i_step>0; i_step--){
-    // Write MSB from ADS1x and acknowledge it
-    i2c_master_write_byte(cmd, *(data_write + i_step - 1), I2C_MASTER_ACK);
-  }
-  // Put Stop command in queue
-  i2c_master_stop(cmd);
-
-  // Execute all queued commands, 1000ms timeout
-  i2c_master_cmd_begin(ADS1x_I2C_PORT_NUM, cmd, 1000 / portTICK_PERIOD_MS);
-  i2c_cmd_link_delete(cmd);
-}
-
-
-void ADS1x::initConvTable(size_t i_size_conv) {
+void ADS1x::_initConvTable(size_t i_size_conv) {
   /**
    * Initialize pointer for conversion table
    * @param i_size_conv: row of the conversion table
@@ -682,7 +763,6 @@ void ADS1x::activateFilter(){
    */
 
   _bFilterActive = true;
-  //_iBuffMaxFillIndex=0;
 
   if (ADS1x_CONV_BUF_SIZE == 5){
       _ptrFilterCoeff = new float[5];
@@ -766,6 +846,7 @@ int ADS1x::getAbsBufSize(){
   return (int)ADS1x_CONV_BUF_SIZE;
 }
 
+
 int16_t* ADS1x::getBuffer(){
   /**
    * @brief get the pointer to the buffer
@@ -813,6 +894,7 @@ float ADS1x::_getAvgFilterVal(){
   return f_filter_value;
 }
 
+
 bool ADS1x::isValueFrozen(){
   /**
    * @brief check if the Sensor raw value is frozen. Is only active when the the filter is active.
@@ -849,7 +931,7 @@ bool ADS1x::isValueFrozen(){
 
       if (_iValFroozenDebCnt == ADS1x_DEB_VALUE_FROZEN) {
         b_status = false;
-        ESP_LOGE(strLogTag, "Sensor raw values in buffer are equal. Last raw value: %d.\n", i_last_val);
+        ESP_LOGE(strLogTag, "Sensor raw values in buffer are equal. Last raw value: %d.", i_last_val);
         _iValFroozenDebCnt = 0;
       }
     } else {
@@ -860,45 +942,42 @@ bool ADS1x::isValueFrozen(){
 }
 
 
-float ADS1x::getConvVal(){
+esp_err_t ADS1x::getConvVal(float * f_conversion_value){
   /**
    * @brief get the filtered conversion value
    *
    *
    */
 
-  float f_conversion_value;
+  esp_err_t ret_value = ESP_OK;
+  uint16_t i_raw_value = 0;
 
   // fill the filter buffer an increment the ring buffer counter
-  _iBuffCnt = (_iBuffCnt+1) % ADS1x_CONV_BUF_SIZE; // ring buffer
   _iBuffMaxFillIndex = std::max(_iBuffMaxFillIndex,_iBuffCnt); // get fill index of filter. Used for error detection or filter selsction
-  _ptrConvBuff[_iBuffCnt] = readConversionRegister(); // read the register
 
-  // Filter
-  if (_bFilterActive){
-    // if filter is not fully filled for savitzky golay filter use average filter
-    if (_bSavGolFilterActive && (_iBuffMaxFillIndex +1) == ADS1x_CONV_BUF_SIZE){
-    // apply savitzky golay filter
-      f_conversion_value = _getSavGolFilterVal();
+  ret_value = readConversionRegister(&i_raw_value);
+
+  if (ret_value == ESP_OK){
+    _iBuffCnt = (_iBuffCnt+1) % ADS1x_CONV_BUF_SIZE; // ring buffer
+    _ptrConvBuff[_iBuffCnt] = i_raw_value; // read the register
+
+    // Filter
+    if (_bFilterActive){
+      // if filter is not fully filled for savitzky golay filter use average filter
+      if (_bSavGolFilterActive && (_iBuffMaxFillIndex +1) == ADS1x_CONV_BUF_SIZE){
+      // apply savitzky golay filter
+        *f_conversion_value = _getSavGolFilterVal();
+      } else {
+      // apply avg filter
+        *f_conversion_value = _getAvgFilterVal();
+      }
     } else {
-    // apply avg filter
-      f_conversion_value = _getAvgFilterVal();
+      *f_conversion_value = (float)getLatestBufVal();
     }
-  } else {
-    f_conversion_value = (float)getLatestBufVal();
   }
-  return f_conversion_value;
+  return ret_value;
 }
 
-
-bool ADS1x::getConnectionStatus(){
-  /**
-   * @brief get Connection status of ADS1x. If true, connection is OK
-   *
-   */
-
-  return _bConnectStatus;
-}
 
 uint8_t ADS1x::_lowbyte(uint16_t data){
   /**
@@ -907,6 +986,7 @@ uint8_t ADS1x::_lowbyte(uint16_t data){
    */
   return (uint8_t)(data & 0xFF);
 }
+
 
 uint8_t ADS1x::_highbyte(uint16_t data){
   /**
