@@ -55,8 +55,6 @@ esp_err_t ADS1x::_configAlertPin() {
 
     //zero-initialize the config structure.
     gpio_config_t io_conf = {};
-    //disable interrupt
-    io_conf.intr_type = GPIO_INTR_DISABLE;
     //set as output mode
     io_conf.mode = GPIO_MODE_INPUT;
     //bit mask of the pins that you want
@@ -65,12 +63,16 @@ esp_err_t ADS1x::_configAlertPin() {
     if (ADS1x_CMP_POL_SETTINGS == ADS1x_CMP_POL_ACTIVE_HIGH) {
       // Comparator latches active high
 
+      // Expect interrupt on falling edge when active high
+      io_conf.intr_type = GPIO_INTR_NEGEDGE;
       //enable pull-down mode
       io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
       //disable pull-up mode
       io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
     } else {
       // Comparator latches active low
+      // Expect interrupt on falling edge when active high
+      io_conf.intr_type = GPIO_INTR_POSEDGE;
       //disable pull-down mode
       io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
       //enable pull-up mode
