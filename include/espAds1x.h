@@ -68,6 +68,7 @@ class ADS1x
         uint16_t _iConfigRegister;
         uint16_t _iLowThreshRegister;
         uint16_t _iHighThreshRegister;
+        esp_err_t _configAlertPin();
         esp_err_t _initI2CMaster();
         void _initConvTable(size_t);
         void _writeBit(uint16_t &, int, bool);

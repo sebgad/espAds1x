@@ -14,7 +14,9 @@ ADS1x::ADS1x() {
   // Initialize I2C
   ESP_ERROR_CHECK_WITHOUT_ABORT(_initI2CMaster());
   writeConfiguration();
+  ESP_ERROR_CHECK_WITHOUT_ABORT(_configAlertPin());
 }
+
 
 esp_err_t ADS1x::writeConfiguration() {
   /**
@@ -37,6 +39,45 @@ esp_err_t ADS1x::writeConfiguration() {
   }
   if (ret_value != ESP_OK) {
     ESP_LOGE(strLogTag, "Write configuration register failed. Errror Code: %s", esp_err_to_name(ret_value));
+  }
+  return ret_value;
+}
+
+
+esp_err_t ADS1x::_configAlertPin() {
+  /***
+   * Configure the Alert Ready pin based on the comparator configuration.
+  */
+  esp_err_t ret_value = ESP_OK;
+
+  if (ADS1x_CMP_QUE_SETTINGS != ADS1x_CMP_DISABLE){
+    // Comperator assertion is activated
+
+    //zero-initialize the config structure.
+    gpio_config_t io_conf = {};
+    //disable interrupt
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    //set as output mode
+    io_conf.mode = GPIO_MODE_INPUT;
+    //bit mask of the pins that you want
+    io_conf.pin_bit_mask  = ADS1x_ALERTRDY_PIN_SEL;
+
+    if (ADS1x_CMP_POL_SETTINGS == ADS1x_CMP_POL_ACTIVE_HIGH) {
+      // Comparator latches active high
+
+      //enable pull-down mode
+      io_conf.pull_down_en = GPIO_PULLDOWN_ENABLE;
+      //disable pull-up mode
+      io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    } else {
+      // Comparator latches active low
+      //disable pull-down mode
+      io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+      //enable pull-up mode
+      io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    }
+    //configure GPIO with the given settings
+    ret_value = gpio_config(&io_conf);
   }
   return ret_value;
 }
